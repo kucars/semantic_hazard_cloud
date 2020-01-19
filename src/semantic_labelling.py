@@ -18,7 +18,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
 
 from sensor_msgs.msg import PointCloud2
-from color_pcl_generator import PointType, ColorPclGenerator
+from color_semantic_pcl_generator import ColorPclSemanticGenerator
 import message_filters
 import time
 
@@ -27,14 +27,24 @@ import cv2
 
 from semantic_cloud.msg import *
 from semantic_cloud.srv import *
-from jsk_rviz_plugins.msg import *
+#from jsk_rviz_plugins.msg import *
 from std_msgs.msg import ColorRGBA, Float32
 
+from tensorflow.keras.models import load_model, model_from_json
+from tensorflow.keras.preprocessing import image
+
+import matplotlib.pyplot as plt
+
+import rospkg
+rospack  = rospkg.RosPack()
+pkg_path = rospack.get_path('semantic_hazard_cloud')
+sys.path.append(pkg_path + '/../image-segmentation-keras/keras_segmentation')
+print (pkg_path)
+
+from predict import predict, predict_multiple , evaluate
+
 # Class Labels
-labels = ['backgroud', 'wall', 'floor', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'door', 'window', 'bookshelf',
-        'picture', 'counter', 'blinds', 'desk', 'shelves', 'curtain', 'dresser', 'pillow', 'mirror',
-        'floor_mat', 'clothes', 'ceiling', 'books', 'fridge', 'tv', 'paper', 'towel', 'shower_curtain',
-        'box', 'whiteboard', 'person', 'night_stand', 'toilet', 'sink', 'lamp', 'bathtub', 'bag']
+labels = ['backgroud', 'risk1l', 'risk1h', 'risk2l', 'risk2h', 'risk3l', 'risk3h']
 
 def color_map(N=256, normalized=False):
     """
@@ -92,50 +102,63 @@ class SemanticCloud:
         \param gen_pcl (bool) whether generate point cloud, if set to true the node will subscribe to depth image
         """
         self.real_sense  = rospy.get_param('/semantic_pcl/real_sense')
-        self.labels_pub  = rospy.Publisher("/semantic_pcl/labels", OverlayText, queue_size=1)
+        #self.labels_pub  = rospy.Publisher("/semantic_pcl/labels", OverlayText, queue_size=1)
         self.labels_list = []
-        self.text = OverlayText()
+        #self.text = OverlayText()
         # Get image size
         self.img_width, self.img_height = rospy.get_param('/camera/width'), rospy.get_param('/camera/height')
-
         self.throttle_rate = rospy.get_param('/semantic_pcl/throttle_rate')
         self.last_time = rospy.Time.now()
         # Set up CNN is use semantics
-        if self.point_type is not PointType.COLOR:
-            print('Setting up CNN model...')
-            # Set device
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            # Get dataset
-            self.dataset = rospy.get_param('/semantic_pcl/dataset')
-            # Setup model
-            model_name ='pspnet'
-            model_path = rospy.get_param('/semantic_pcl/model_path')
-            if self.dataset == 'sunrgbd': # If use version fine tuned on sunrgbd dataset
-                self.n_classes = 38 # Semantic class number
-                self.model = get_model(model_name, self.n_classes, version = 'sunrgbd_res50')
-                state = torch.load(model_path)
-                self.model.load_state_dict(state)
-                self.cnn_input_size = (321, 321)
-                self.mean = np.array([104.00699, 116.66877, 122.67892]) # Mean value of dataset
-            elif self.dataset == 'ade20k':
-                self.n_classes = 150 # Semantic class number
-                self.model = get_model(model_name, self.n_classes, version = 'ade20k')
-                state = torch.load(model_path)
-                self.model.load_state_dict(convert_state_dict(state['model_state'])) # Remove 'module' from dictionary keys
-                self.cnn_input_size = (473, 473)
-                self.mean = np.array([104.00699, 116.66877, 122.67892]) # Mean value of dataset
-            self.model = self.model.to(self.device)
-            self.model.eval()
-            self.cmap = color_map(N = self.n_classes, normalized = False) # Color map for semantic classes
+        print('Setting up CNN model...')
+        # Set device
+        #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # Get dataset
+        self.dataset = rospy.get_param('/semantic_pcl/dataset')
+        # Setup model
+        model_name ='vgg_unet'
+        model_path = rospy.get_param('/semantic_pcl/model_path')
+        model_json_path = rospy.get_param('/semantic_pcl/model_json_path')
+        test_image_path_input = rospy.get_param('/model_params/test_image_path_input')
+        test_image_path_output = rospy.get_param('/model_params/test_image_path_output')
+        model_input_height = rospy.get_param('/model_params/model_input_height')
+        model_input_width = rospy.get_param('/model_params/model_input_width')
+        model_output_height = rospy.get_param('/model_params/model_output_height')
+        model_output_width = rospy.get_param('/model_params/model_output_width')
+        model_n_classes =  rospy.get_param('/model_params/model_n_classes')
+
+        if self.dataset == 'kucarsRisk': 
+            self.n_classes = 7 # Semantic class number
+            # load the model + weights 
+            # Recreate the exact same model, including its weights and the optimizer
+            self.new_model = load_model(model_path)
+            self.new_model.input_width = model_input_width 
+            self.new_model.input_height = model_input_height 
+            self.new_model.output_width = model_output_width 
+            self.new_model.output_height = model_output_height 
+            self.new_model.n_classes = model_n_classes 
+            # Show the model architecture
+            self.new_model.summary()
+            print("Loaded model from disk")
+
+            self.new_model.compile(loss='categorical_crossentropy', optimizer='adadelta', metrics=['accuracy'])
+            ##### One Image Prediction #### 
+            #img = cv2.imread('/home/reem/frame0000.jpg',0)
+            #plt.imshow(img)
+            #plt.show()
+            predict(model=self.new_model ,inp=test_image_path_input,out_fname=test_image_path_output)
+            #out = cv2.imread('/home/reem/out.png',0)
+            #plt.imshow(out)
+            #plt.show()
+
+
+        self.cmap = color_map(N = self.n_classes, normalized = False) # Color map for semantic classes
         # Declare array containers
-        if self.point_type is PointType.SEMANTICS_BAYESIAN:
-            self.semantic_colors = np.zeros((3, self.img_height, self.img_width, 3), dtype = np.uint8) # Numpy array to store 3 decoded semantic images with highest confidences
-            self.confidences = np.zeros((3, self.img_height, self.img_width), dtype = np.float32) # Numpy array to store top 3 class confidences
         # Set up ROS
         print('Setting up ROS...')
         self.bridge = CvBridge() # CvBridge to transform ROS Image message to OpenCV image
         # Semantic image publisher
-        self.sem_img_pub = rospy.Publisher("/semantic_pcl/semantic_image", Image, queue_size = 1)
+        self.sem_img_pub = rospy.Publisher("/semantic_pcl/semantic_hazard_image", Image, queue_size = 1)
         # Set up ros image subscriber
         # Set buff_size to average msg size to avoid accumulating delay
         if gen_pcl:
@@ -147,13 +170,15 @@ class SemanticCloud:
             cx = rospy.get_param('/camera/cx')
             cy = rospy.get_param('/camera/cy')
             intrinsic = np.matrix([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype = np.float32)
-            self.pcl_pub = rospy.Publisher("/semantic_pcl/semantic_pcl", PointCloud2, queue_size = 1)
+            self.pcl_pub = rospy.Publisher("/semantic_pcl/semantic_hazard_pcl", PointCloud2, queue_size = 1)
             self.color_sub = message_filters.Subscriber(rospy.get_param('/semantic_pcl/color_image_topic'), Image, queue_size = 1, buff_size = 30*480*640)
             self.depth_sub = message_filters.Subscriber(rospy.get_param('/semantic_pcl/depth_image_topic'), Image, queue_size = 1, buff_size = 40*480*640 ) # increase buffer size to avoid delay (despite queue_size = 1)
             self.ts = message_filters.ApproximateTimeSynchronizer([self.color_sub, self.depth_sub], queue_size = 1, slop = 0.3) # Take in one color image and one depth image with a limite time gap between message time stamps
             self.ts.registerCallback(self.color_depth_callback)
-            self.cloud_generator = ColorPclGenerator(intrinsic, self.img_width,self.img_height, frame_id , self.point_type)
+            #self.cloud_generator = ColorPclGenerator(intrinsic, self.img_width,self.img_height, frame_id , self.point_type)
+            self.cloud_generator = ColorPclSemanticGenerator(intrinsic, self.img_width,self.img_height, frame_id )
         else:
+            print("No Cloud generation")
             self.image_sub = rospy.Subscriber(rospy.get_param('/semantic_pcl/color_image_topic'), Image, self.color_callback, queue_size = 1, buff_size = 30*480*640)
 
         semantic_colored_labels_srv = rospy.Service('get_semantic_colored_labels', GetSemanticColoredLabels, self.get_semantic_colored_labels)
@@ -165,10 +190,7 @@ class SemanticCloud:
         scls = SemanticColoredLabels()
         for i in range(0,self.n_classes):
             scl = SemanticColoredLabel()
-            if self.dataset == 'sunrgbd':
-                label = labels_sunrgbd[i]
-            elif self.dataset == 'ade20k':
-                label = labels_ade20k[i]
+            label = labels[i] ; 
             scl.label = label
             scl.color_r = self.cmap[i,0]
             scl.color_g = self.cmap[i,1]
@@ -193,10 +215,7 @@ class SemanticCloud:
         self.text.bg_color = ColorRGBA(255,255,255, 0.5)
         for color_index in unique_labels:
             label = ''
-            if self.dataset == 'sunrgbd':
-                label = labels_sunrgbd[color_index]
-            elif self.dataset == 'ade20k':
-                label = labels_ade20k[color_index]
+            label = labels[color_index] ; 
             count+=1
             if not label in self.labels_list:
                 self.labels_list.append(label)
@@ -207,7 +226,7 @@ class SemanticCloud:
 
     def color_callback(self, color_img_ros):
         """
-        Callback function for color image, de semantic segmantation and show the decoded image. For test purpose
+        Callback function for color image, do semantic segmantation and show the decoded image. For test purpose
         \param color_img_ros (sensor_msgs.Image) input ros color image message
         """
         print('callback')
@@ -215,20 +234,29 @@ class SemanticCloud:
             color_img = self.bridge.imgmsg_to_cv2(color_img_ros, "bgr8") # Convert ros msg to numpy array
         except CvBridgeError as e:
             print(e)
+
+    
+        seg = predict(model=self.new_model, inp=color_img)
+
+
         # Do semantic segmantation
+        '''
         class_probs = self.predict(color_img)
         confidence, label = class_probs.max(1)
         confidence, label = confidence.squeeze(0).numpy(), label.squeeze(0).numpy()
         label = resize(label, (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
         label = label.astype(np.int)
+        '''
         # Add semantic class colors
-        decoded = decode_segmap(label, self.n_classes, self.cmap)        # Show input image and decoded image
-        confidence = resize(confidence, (self.img_height, self.img_width),  mode = 'reflect', preserve_range = True)
+        #decoded = decode_segmap(label, self.n_classes, self.cmap)        # Show input image and decoded image
+        #confidence = resize(confidence, (self.img_height, self.img_width),  mode = 'reflect', preserve_range = True)
         cv2.imshow('Camera image', color_img)
-        cv2.imshow('confidence', confidence)
-        cv2.imshow('Semantic segmantation', decoded)
+        cv2.imshow('seg',seg)
+        #cv2.imshow('confidence', confidence)
+        #cv2.imshow('Semantic segmantation', decoded)
         cv2.waitKey(3)
 
+    
     def color_depth_callback(self, color_img_ros, depth_img_ros):
         """
         Callback function to produce point cloud registered with semantic class color based on input color image and depth image
@@ -254,30 +282,18 @@ class SemanticCloud:
             # realsense camera gives depth measurements in mm
             if self.real_sense:
                 depth_img = depth_img /1000.0
-        if self.point_type is PointType.COLOR:
-            cloud_ros = self.cloud_generator.generate_cloud_color(color_img, depth_img, color_img_ros.header.stamp)
-        else:
-            # Do semantic segmantation
-            if self.point_type is PointType.SEMANTICS_MAX:
-                semantic_color, pred_confidence = self.predict_max(color_img)
-                cloud_ros = self.cloud_generator.generate_cloud_semantic_max(color_img, depth_img, semantic_color, pred_confidence, color_img_ros.header.stamp)
 
-            elif self.point_type is PointType.SEMANTICS_BAYESIAN:
-                self.predict_bayesian(color_img)
-                # Produce point cloud with rgb colors, semantic colors and confidences
-                cloud_ros = self.cloud_generator.generate_cloud_semantic_bayesian(color_img, depth_img, self.semantic_colors, self.confidences, color_img_ros.header.stamp)
 
-            # Publish semantic image
-            if self.sem_img_pub.get_num_connections() > 0:
-                if self.point_type is PointType.SEMANTICS_MAX:
-                    semantic_color_msg = self.bridge.cv2_to_imgmsg(semantic_color, encoding="bgr8")
-                    #cvtColor(semantic_color_msg, semantic_color_msg, BGR2RGB);
-                else:
-                    semantic_color_msg = self.bridge.cv2_to_imgmsg(self.semantic_colors[0], encoding="bgr8")
-                self.sem_img_pub.publish(semantic_color_msg)
-
+        semantic_color = predict(model=self.new_model,inp=color_img)
+        cloud_ros = self.cloud_generator.generate_cloud_semantic(color_img, depth_img, semantic_color, color_img_ros.header.stamp)
+        # Publish semantic image
+        if self.sem_img_pub.get_num_connections() > 0:
+            semantic_color_msg = self.bridge.cv2_to_imgmsg(semantic_color, encoding="bgr8")
+            cvtColor(semantic_color_msg, semantic_color_msg, BGR2RGB)
+            self.sem_img_pub.publish(semantic_color_msg)
         # Publish point cloud
         self.pcl_pub.publish(cloud_ros)
+     
 
     def predict_max(self, img):
         """
@@ -297,25 +313,6 @@ class SemanticCloud:
         self.get_label(pred_labels)
         return (semantic_color, pred_confidence)
 
-    def predict_bayesian(self, img):
-        """
-        Do semantic prediction for bayesian fusion
-        \param img (numpy array rgb8)
-        """
-        class_probs = self.predict(img)
-        # Take 3 best predictions and their confidences (probabilities)
-        pred_confidences, pred_labels  = torch.topk(input = class_probs, k = 3, dim = 1, largest = True, sorted = True)
-        pred_labels = pred_labels.squeeze(0).cpu().numpy()
-        pred_confidences = pred_confidences.squeeze(0).cpu().numpy()
-        # Resize predicted labels and confidences to original image size
-        for i in range(pred_labels.shape[0]):
-            pred_labels_resized = resize(pred_labels[i], (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
-            pred_labels_resized = pred_labels_resized.astype(np.int)
-            # Add semantic class colors
-            self.semantic_colors[i] = decode_segmap(pred_labels_resized, self.n_classes, self.cmap)
-        for i in range(pred_confidences.shape[0]):
-            self.confidences[i] = resize(pred_confidences[i], (self.img_height, self.img_width),  mode = 'reflect', preserve_range = True)
-        self.get_label(pred_labels)
 
     def predict(self, img):
         """
@@ -330,6 +327,7 @@ class SemanticCloud:
         img -= self.mean
         # Convert HWC -> CHW
         img = img.transpose(2, 0, 1)
+
         # Convert to tensor
         img = torch.tensor(img, dtype = torch.float32)
         img = img.unsqueeze(0) # Add batch dimension required by CNN
@@ -343,7 +341,7 @@ class SemanticCloud:
             return outputs
 
 def main(args):
-    rospy.init_node('semantic_cloud', anonymous=True)
+    rospy.init_node('semantic_hazard_cloud_node', anonymous=True)
     seg_cnn = SemanticCloud(gen_pcl = True)
     try:
         rospy.spin()
