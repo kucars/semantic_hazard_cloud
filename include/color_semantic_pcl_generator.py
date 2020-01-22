@@ -125,10 +125,11 @@ class ColorPclSemanticGenerator:
         self.semantic_color_vect[:,0:1] = semantic_color[:,:,0].reshape(-1,1)
         self.semantic_color_vect[:,1:2] = semantic_color[:,:,1].reshape(-1,1)
         self.semantic_color_vect[:,2:3] = semantic_color[:,:,2].reshape(-1,1)
-        # Concatenate data
+        # Concatenate data 
+        #self.ros_data[:,4:5] = self.bgr0_vect.view('<f4')
         self.ros_data[:,4:5] =self.semantic_color_vect.view('<f4')
-
         #self.ros_data[:,5:6] = self.semantic_color_vect.view('<f4')
+
         return self.make_ros_cloud(stamp)
     
   

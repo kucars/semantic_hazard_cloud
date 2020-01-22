@@ -13,6 +13,7 @@ from __future__ import print_function
 import sys
 import rospy
 from sensor_msgs.msg import Image
+
 from cv_bridge import CvBridge, CvBridgeError
 
 import numpy as np
@@ -24,6 +25,7 @@ import time
 
 from skimage.transform import resize
 import cv2
+from cv_bridge.boost.cv_bridge_boost import getCvType
 
 from semantic_cloud.msg import *
 from semantic_cloud.srv import *
@@ -126,12 +128,14 @@ class SemanticCloud:
         model_output_height = rospy.get_param('/model_params/model_output_height')
         model_output_width = rospy.get_param('/model_params/model_output_width')
         model_n_classes =  rospy.get_param('/model_params/model_n_classes')
+        model_checkpoints_path= rospy.get_param('/model_params/model_checkpoints_path')
 
         if self.dataset == 'kucarsRisk': 
             self.n_classes = 7 # Semantic class number
             # load the model + weights 
             # Recreate the exact same model, including its weights and the optimizer
-            self.new_model = load_model(model_path)
+            #self.new_model = model_from_json(model_path,custom_objects=None)
+            self.new_model = load_model(model_path,custom_objects=None)
             self.new_model.input_width = model_input_width 
             self.new_model.input_height = model_input_height 
             self.new_model.output_width = model_output_width 
@@ -143,16 +147,22 @@ class SemanticCloud:
 
             self.new_model.compile(loss='categorical_crossentropy', optimizer='adadelta', metrics=['accuracy'])
             ##### One Image Prediction #### 
-            #img = cv2.imread('/home/reem/frame0000.jpg',0)
-            #plt.imshow(img)
+            img = cv2.imread(test_image_path_input)
+	    #img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            #plt.imshow(img_rgb)
             #plt.show()
+  	    #cv2.imwrite(test_image_path_input,img_rgb)
             predict(model=self.new_model ,inp=test_image_path_input,out_fname=test_image_path_output)
-            #out = cv2.imread('/home/reem/out.png',0)
-            #plt.imshow(out)
+            #predict(inp=test_image_path_input,out_fname=test_image_path_output, checkpoints_path=model_checkpoints_path)
+	    #plt.imshow(pr)
             #plt.show()
-
-
-        self.cmap = color_map(N = self.n_classes, normalized = False) # Color map for semantic classes
+	    
+	    out = cv2.imread(test_image_path_output)
+	    out_rgb = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
+	    plt.imshow(out_rgb)
+            plt.show()
+	    
+        self.cmap = color_map(N = self.n_classes, normalized = True) # Color map for semantic classes
         # Declare array containers
         # Set up ROS
         print('Setting up ROS...')
@@ -237,7 +247,8 @@ class SemanticCloud:
 
     
         seg = predict(model=self.new_model, inp=color_img)
-
+        print (seg.shape)
+        print (color_img.shape)
 
         # Do semantic segmantation
         '''
@@ -286,15 +297,27 @@ class SemanticCloud:
 
         semantic_color = predict(model=self.new_model,inp=color_img)
         cloud_ros = self.cloud_generator.generate_cloud_semantic(color_img, depth_img, semantic_color, color_img_ros.header.stamp)
+
+        pred_labels = semantic_color.max(1)
+        #pred_labels = pred_labels.squeeze(0).cpu().numpy()
+        pred_labels = resize(pred_labels, (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
+        pred_labels = pred_labels.astype(np.int)
+	#print (pred_labels)
+        semantic_color = decode_segmap(pred_labels, self.n_classes, self.cmap)
+
         # Publish semantic image
         if self.sem_img_pub.get_num_connections() > 0:
-            semantic_color_msg = self.bridge.cv2_to_imgmsg(semantic_color, encoding="bgr8")
-            cvtColor(semantic_color_msg, semantic_color_msg, BGR2RGB)
-            self.sem_img_pub.publish(semantic_color_msg)
+                try:
+            		semantic_color_msg = self.bridge.cv2_to_imgmsg(semantic_color, encoding="bgr8")
+                        #rgb_img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)	
+		        self.sem_img_pub.publish(semantic_color_msg)
+    		except CvBridgeError as e:
+      			print(e)
+
         # Publish point cloud
         self.pcl_pub.publish(cloud_ros)
      
-
+    '''
     def predict_max(self, img):
         """
         Do semantic prediction for max fusion
@@ -339,7 +362,7 @@ class SemanticCloud:
             # Apply softmax to obtain normalized probabilities
             outputs = torch.nn.functional.softmax(outputs, 1)
             return outputs
-
+    '''
 def main(args):
     rospy.init_node('semantic_hazard_cloud_node', anonymous=True)
     seg_cnn = SemanticCloud(gen_pcl = True)

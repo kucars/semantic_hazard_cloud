@@ -26,14 +26,16 @@ semantic_pcl:
   dataset: "kucarsRisk" 
   model_path: "/home/reem/catkin_ws/src/semantic_hazard_cloud/models_trained/model.h5"
   model_json_path: "/home/reem/catkin_ws/src/semantic_hazard_cloud/models_trained/path_to_checkpoints_config.json"
+  checkpoints_path: "/home/reem/catkin_ws/src/semantic_hazard_cloud/models_trained/"
   throttle_rate: 0.5 # 1/val in hz 
   real_sense: false
 
 model_params:
-  test_image_path_input: "/home/reem/catkin_ws/src/semantic_hazard_cloud/test_images/frame0000.jpg"
-  test_image_path_output: "/home/reem/catkin_ws/src/semantic_hazard_cloud/test_images/outFrame0000.png"
+  test_image_path_input: "/home/reem/catkin_ws/src/semantic_hazard_cloud/test_images/frame0020.jpg"
+  test_image_path_output: "/home/reem/catkin_ws/src/semantic_hazard_cloud/test_images/outFrame0020.png"
   model_input_height: 480
   model_input_width: 640
-  model_output_height: 320
-  model_output_width: 240
+  model_output_height: 240
+  model_output_width: 320
   model_n_classes: 7
+  model_checkpoints_path:  "/home/reem/catkin_ws/src/semantic_hazard_cloud/models_trained/path_to_checkpoints"
