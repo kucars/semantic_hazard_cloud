@@ -35,6 +35,8 @@ from std_msgs.msg import ColorRGBA, Float32
 from tensorflow.keras.models import load_model, model_from_json
 from tensorflow.keras.preprocessing import image
 
+from tensorflow.keras.backend import clear_session
+
 import matplotlib.pyplot as plt
 
 import rospkg
@@ -69,6 +71,8 @@ def color_map(N=256, normalized=False):
             c = c >> 3
         cmap[i] = np.array([r, g, b])
     cmap = cmap/255.0 if normalized else cmap
+    print ("CMAP")
+    print (cmap)
     return cmap
 
 def decode_segmap(temp, n_classes, cmap):
@@ -82,10 +86,11 @@ def decode_segmap(temp, n_classes, cmap):
     r = temp.copy()
     g = temp.copy()
     b = temp.copy()
+    
     for l in range(0, n_classes):
-        r[temp == l] = cmap[l,0]
-        g[temp == l] = cmap[l,1]
-        b[temp == l] = cmap[l,2]
+        r[temp == l] = cmap[l,0] * 100 
+        g[temp == l] = cmap[l,1] * 50 
+        b[temp == l] = cmap[l,2] * 10
     bgr = np.zeros((temp.shape[0], temp.shape[1], 3))
     bgr[:, :, 0] = b
     bgr[:, :, 1] = g
@@ -135,7 +140,8 @@ class SemanticCloud:
             # load the model + weights 
             # Recreate the exact same model, including its weights and the optimizer
             #self.new_model = model_from_json(model_path,custom_objects=None)
-            self.new_model = load_model(model_path,custom_objects=None)
+	    #clear_session()
+            self.new_model = load_model(model_path)#,custom_objects=None)
             self.new_model.input_width = model_input_width 
             self.new_model.input_height = model_input_height 
             self.new_model.output_width = model_output_width 
@@ -147,21 +153,14 @@ class SemanticCloud:
 
             self.new_model.compile(loss='categorical_crossentropy', optimizer='adadelta', metrics=['accuracy'])
             ##### One Image Prediction #### 
+
             img = cv2.imread(test_image_path_input)
-	    #img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            #plt.imshow(img_rgb)
-            #plt.show()
-  	    #cv2.imwrite(test_image_path_input,img_rgb)
-            predict(model=self.new_model ,inp=test_image_path_input,out_fname=test_image_path_output)
-            #predict(inp=test_image_path_input,out_fname=test_image_path_output, checkpoints_path=model_checkpoints_path)
-	    #plt.imshow(pr)
-            #plt.show()
-	    
+	    predict(model=self.new_model ,inp=test_image_path_input,out_fname=test_image_path_output) 
 	    out = cv2.imread(test_image_path_output)
-	    out_rgb = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
-	    plt.imshow(out_rgb)
+	    #out_rgb = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
+	    plt.imshow(out)
             plt.show()
-	    
+
         self.cmap = color_map(N = self.n_classes, normalized = True) # Color map for semantic classes
         # Declare array containers
         # Set up ROS
@@ -239,16 +238,27 @@ class SemanticCloud:
         Callback function for color image, do semantic segmantation and show the decoded image. For test purpose
         \param color_img_ros (sensor_msgs.Image) input ros color image message
         """
+
         print('callback')
         try:
             color_img = self.bridge.imgmsg_to_cv2(color_img_ros, "bgr8") # Convert ros msg to numpy array
         except CvBridgeError as e:
             print(e)
 
-    
+
+	# Do semantic segmantation
         seg = predict(model=self.new_model, inp=color_img)
         print (seg.shape)
         print (color_img.shape)
+        #class_probs = self.predict(color_img)
+        #label = seg.max(1)
+        #label = label.squeeze(0).numpy()
+        #label = resize(seg, (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
+        #label = seg.astype(np.int)
+        # Add semantic class colors
+	#print (label.size)
+	#print (label.shape)
+        #decoded = decode_segmap(label, self.n_classes, self.cmap)        # Show input image and decoded image
 
         # Do semantic segmantation
         '''
@@ -257,11 +267,15 @@ class SemanticCloud:
         confidence, label = confidence.squeeze(0).numpy(), label.squeeze(0).numpy()
         label = resize(label, (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
         label = label.astype(np.int)
-        '''
+
         # Add semantic class colors
-        #decoded = decode_segmap(label, self.n_classes, self.cmap)        # Show input image and decoded image
-        #confidence = resize(confidence, (self.img_height, self.img_width),  mode = 'reflect', preserve_range = True)
+        decoded = decode_segmap(label, self.n_classes, self.cmap)        # Show input image and decoded image
+        confidence = resize(confidence, (self.img_height, self.img_width),  mode = 'reflect', preserve_range = True)
+        '''
+
+
         cv2.imshow('Camera image', color_img)
+        seg = seg.astype(np.uint8)
         cv2.imshow('seg',seg)
         #cv2.imshow('confidence', confidence)
         #cv2.imshow('Semantic segmantation', decoded)
@@ -297,14 +311,7 @@ class SemanticCloud:
 
         semantic_color = predict(model=self.new_model,inp=color_img)
         cloud_ros = self.cloud_generator.generate_cloud_semantic(color_img, depth_img, semantic_color, color_img_ros.header.stamp)
-
-        pred_labels = semantic_color.max(1)
-        #pred_labels = pred_labels.squeeze(0).cpu().numpy()
-        pred_labels = resize(pred_labels, (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
-        pred_labels = pred_labels.astype(np.int)
-	#print (pred_labels)
-        semantic_color = decode_segmap(pred_labels, self.n_classes, self.cmap)
-
+        semantic_color = semantic_color.astype(np.uint8)
         # Publish semantic image
         if self.sem_img_pub.get_num_connections() > 0:
                 try:
