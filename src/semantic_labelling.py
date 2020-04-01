@@ -44,7 +44,8 @@ rospack  = rospkg.RosPack()
 pkg_path = rospack.get_path('semantic_hazard_cloud')
 sys.path.append(pkg_path + '/../image-segmentation-keras/keras_segmentation')
 print (pkg_path)
-
+imgCounter = 0 
+imgSemanticCounter=0 
 from predict import predict, predict_multiple , evaluate
 
 # Class Labels
@@ -72,6 +73,29 @@ def color_map(N=256, normalized=False):
         cmap[i] = np.array([r, g, b])
     cmap = cmap/255.0 if normalized else cmap
     print ("CMAP")
+    '''
+    cmap[0,0] = np.uint8(107.0) 
+    cmap[0,1] = np.uint8(194.0) 
+    cmap[0,2] = np.uint8(216.0) 
+    cmap[1,0] = np.uint8(122.0) 
+    cmap[1,1] = np.uint8(77.0) 
+    cmap[1,2] = np.uint8(200.0) 
+    cmap[2,0] = np.uint8(103.0) 
+    cmap[2,1] = np.uint8(130.0) 
+    cmap[2,2] = np.uint8(66.0) 
+    cmap[3,0] = np.uint8(158.0) 
+    cmap[3,1] = np.uint8(193.0) 
+    cmap[3,2] = np.uint8(72.0) 
+    cmap[4,0] = np.uint8(129.0) 
+    cmap[4,1] = np.uint8(232.0)
+    cmap[4,2]= np.uint8(149.0) 
+    cmap[5,0] = np.uint8(251.0) 
+    cmap[5,1] = np.uint8(232.0) 
+    cmap[5,2] = np.uint8(64.0) 
+    cmap[6,0] = np.uint8(79.0) 
+    cmap[6,1] = np.uint8(230.0) 
+    cmap[6,2] = np.uint8(207.0)
+    '''
     print (cmap)
     return cmap
 
@@ -88,9 +112,9 @@ def decode_segmap(temp, n_classes, cmap):
     b = temp.copy()
     
     for l in range(0, n_classes):
-        r[temp == l] = cmap[l,0] * 100 
-        g[temp == l] = cmap[l,1] * 50 
-        b[temp == l] = cmap[l,2] * 10
+        r[temp == l] = cmap[l,0] 
+        g[temp == l] = cmap[l,1] 
+        b[temp == l] = cmap[l,2] 
     bgr = np.zeros((temp.shape[0], temp.shape[1], 3))
     bgr[:, :, 0] = b
     bgr[:, :, 1] = g
@@ -109,6 +133,8 @@ class SemanticCloud:
         \param gen_pcl (bool) whether generate point cloud, if set to true the node will subscribe to depth image
         """
         self.real_sense  = rospy.get_param('/semantic_pcl/real_sense')
+        self.imgCounter = 0 
+	self.imgSemanticCounter = 0 
         #self.labels_pub  = rospy.Publisher("/semantic_pcl/labels", OverlayText, queue_size=1)
         self.labels_list = []
         #self.text = OverlayText()
@@ -134,7 +160,8 @@ class SemanticCloud:
         model_output_width = rospy.get_param('/model_params/model_output_width')
         model_n_classes =  rospy.get_param('/model_params/model_n_classes')
         model_checkpoints_path= rospy.get_param('/model_params/model_checkpoints_path')
-
+	self.test_image_path_output_folder =rospy.get_param('/model_params/test_image_path_output_folder')
+	
         if self.dataset == 'kucarsRisk': 
             self.n_classes = 7 # Semantic class number
             # load the model + weights 
@@ -156,8 +183,8 @@ class SemanticCloud:
 
             img = cv2.imread(test_image_path_input)
 	    predict(model=self.new_model ,inp=test_image_path_input,out_fname=test_image_path_output) 
-	    #out = cv2.imread(test_image_path_output)
-	    #out_rgb = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
+	    out = cv2.imread(test_image_path_output)
+	    out_rgb = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
 	    #plt.imshow(out)
             #plt.show()
 
@@ -194,19 +221,82 @@ class SemanticCloud:
         print('Ready.')
 
     def get_semantic_colored_labels(self,GetSemanticColoredLabels):
+	
         print("Get Semantic Colored Labels Service called")
         ret  = GetSemanticColoredLabelsResponse()
         scls = SemanticColoredLabels()
+        scl = SemanticColoredLabel()
+	
         for i in range(0,self.n_classes):
             scl = SemanticColoredLabel()
             label = labels[i] ; 
             scl.label = label
+	    print (self.cmap[i,0])
+	    print (self.cmap[i,1])
+	    print (self.cmap[i,2])
             scl.color_r = self.cmap[i,0]
             scl.color_g = self.cmap[i,1]
             scl.color_b = self.cmap[i,2]
             scls.semantic_colored_labels.append(scl)
+	print(scls)
         ret = scls
         return ret
+	'''
+        label = labels[0]; 
+        scl.label = label
+        scl.color_r =  np.uint8(107.0) #self.cmap[i,0]
+        scl.color_g =  np.uint8(194.0) #self.cmap[i,1]
+        scl.color_b =  np.uint8(216.0) #self.cmap[i,2]
+        scls.semantic_colored_labels.append(scl)
+        scl = SemanticColoredLabel()
+        label = labels[1]; 
+        scl.label = label
+        scl.color_r = np.uint8(122.0) #self.cmap[i,0]
+        scl.color_g = np.uint8(77.0) #self.cmap[i,1]
+        scl.color_b = np.uint8(200.0) #self.cmap[i,2]
+        scls.semantic_colored_labels.append(scl)        
+        scl = SemanticColoredLabel()
+        label = labels[2]; 
+        scl.label = label
+        scl.color_r = np.uint8(103.0) #self.cmap[i,0]
+        scl.color_g = np.uint8(130.0) #self.cmap[i,1]
+        scl.color_b = np.uint8(66.0) #self.cmap[i,2]
+        scls.semantic_colored_labels.append(scl)      
+        scl = SemanticColoredLabel()
+        label = labels[3]; 
+        scl.label = label
+        scl.color_r = np.uint8(158.0) #self.cmap[i,0]
+        scl.color_g = np.uint8(193.0) #self.cmap[i,1]
+        scl.color_b = np.uint8(72.0) #self.cmap[i,2]
+        scls.semantic_colored_labels.append(scl)      
+        scl = SemanticColoredLabel()
+        label = labels[4]; 
+        scl.label = label
+        scl.color_r = np.uint8(129.0) #self.cmap[i,0]
+        scl.color_g = np.uint8(232.0) #self.cmap[i,1]
+        scl.color_b = np.uint8(149.0) #self.cmap[i,2]
+        scls.semantic_colored_labels.append(scl)      
+	ret = scls
+        scl = SemanticColoredLabel()
+        label = labels[5]; 
+        scl.label = label
+        scl.color_r = np.uint8(251.0) #self.cmap[i,0]
+        scl.color_g = np.uint8(232.0) #self.cmap[i,1]
+        scl.color_b = np.uint8(64.0) #self.cmap[i,2]
+        scls.semantic_colored_labels.append(scl)      
+        scl = SemanticColoredLabel()
+        label = labels[6]; 
+        scl.label = label
+        scl.color_r = np.uint8(79.0) #self.cmap[i,0]
+        scl.color_g = np.uint8(230.0) #self.cmap[i,1]
+        scl.color_b = np.uint8(207.0) #self.cmap[i,2]
+        scls.semantic_colored_labels.append(scl)      
+	print(scls)
+        ret = scls
+        return ret
+        '''
+	
+
 
     def get_label(self,pred_label):
         #print(" ============= ")
@@ -248,17 +338,9 @@ class SemanticCloud:
 
 	# Do semantic segmantation
         seg = predict(model=self.new_model, inp=color_img)
-        print (seg.shape)
-        print (color_img.shape)
-        #class_probs = self.predict(color_img)
-        #label = seg.max(1)
-        #label = label.squeeze(0).numpy()
-        #label = resize(seg, (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
-        #label = seg.astype(np.int)
-        # Add semantic class colors
-	#print (label.size)
-	#print (label.shape)
-        #decoded = decode_segmap(label, self.n_classes, self.cmap)        # Show input image and decoded image
+        seg = seg.astype(np.uint8)
+        #print (seg.shape)
+        #print (color_img.shape)
 
         # Do semantic segmantation
         '''
@@ -273,9 +355,7 @@ class SemanticCloud:
         confidence = resize(confidence, (self.img_height, self.img_width),  mode = 'reflect', preserve_range = True)
         '''
 
-
         cv2.imshow('Camera image', color_img)
-        seg = seg.astype(np.uint8)
         cv2.imshow('seg',seg)
         #cv2.imshow('confidence', confidence)
         #cv2.imshow('Semantic segmantation', decoded)
@@ -309,9 +389,32 @@ class SemanticCloud:
                 depth_img = depth_img /1000.0
 
 
+	################## Save all the Images for debugging #####################
+	'''	
+	filename = self.test_image_path_output_folder + "image" + str(self.imgCounter) + ".png" 
+	print (filename)
+	cv2.imwrite(filename, color_img) 
+	self.imgCounter = self.imgCounter + 1 ; 
+	'''
+	##########################################################################
+
+
         semantic_color = predict(model=self.new_model,inp=color_img)
-        cloud_ros = self.cloud_generator.generate_cloud_semantic(color_img, depth_img, semantic_color, color_img_ros.header.stamp)
+
+
+	################## Save all the Images for debugging #####################
+	'''
+	filename = self.test_image_path_output_folder + "semanticimage" + str(self.imgSemanticCounter) + ".png" 
+	print (filename)
+	cv2.imwrite(filename, semantic_color) 
+	self.imgSemanticCounter = self.imgSemanticCounter + 1 ; 
+	'''
+	##########################################################################
+	#label_d = semantic_color.max(1)
+        #label_d = resize(label_d, (self.img_height, self.img_width), order = 0, mode = 'reflect', preserve_range = True) # order = 0, nearest neighbour
+        #label_d = label_d.astype(np.uint8)
         semantic_color = semantic_color.astype(np.uint8)
+        #decoded = decode_segmap(label_d, self.n_classes, self.cmap)        # Show input image and decoded image
         # Publish semantic image
         if self.sem_img_pub.get_num_connections() > 0:
                 try:
@@ -321,7 +424,9 @@ class SemanticCloud:
     		except CvBridgeError as e:
       			print(e)
 
-        # Publish point cloud
+        cloud_ros = self.cloud_generator.generate_cloud_semantic(color_img, depth_img, semantic_color, color_img_ros.header.stamp)
+        #Publish point cloud
+        #self.get_label(pred_labels)
         self.pcl_pub.publish(cloud_ros)
      
     '''

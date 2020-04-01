@@ -32,7 +32,7 @@ class ColorPclSemanticGenerator:
         self.bgr0_vect = np.zeros([width*height, 4], dtype = '<u1') #bgr0
         self.semantic_color_vect = np.zeros([width*height, 4], dtype = '<u1') #bgr0
         self.semantic_colors_vect = np.zeros([width*height, 4 * self.num_semantic_colors], dtype = '<u1') #bgr0bgr0bgr0 ...
-        #self.confidences_vect = np.zeros([width*height, self.num_semantic_colors],dtype = '<f4') # class confidences
+        self.confidences_vect = np.zeros([width*height, self.num_semantic_colors],dtype = '<f4') # class confidences
         # Prepare ros cloud msg
         # Cloud data is serialized into a contiguous buffer, set fields to specify offsets in buffer
         self.cloud_ros = PointCloud2()
@@ -59,8 +59,12 @@ class ColorPclSemanticGenerator:
                             name = "semantic_color",
                             offset = 20,
                             datatype = PointField.FLOAT32, count = 1))
+        self.cloud_ros.fields.append(PointField(
+                            name = "confidence",
+                            offset = 24,
+                            datatype = PointField.FLOAT32, count = 1))
         
-
+        self.cloud_ros.is_bigendian = False
         self.cloud_ros.point_step = 8 * 4 # In bytes
         self.cloud_ros.row_step = self.cloud_ros.point_step * self.cloud_ros.width * self.cloud_ros.height
         self.cloud_ros.is_dense = False
@@ -117,6 +121,7 @@ class ColorPclSemanticGenerator:
         # Concatenate data
         self.ros_data[:,5:6] = self.semantic_color_vect.view('<f4')
         #self.ros_data[:,6:7] = confidence.reshape(-1,1)
+
         return self.make_ros_cloud(stamp)
     '''
     def generate_cloud_semantic(self, bgr_img, depth_img, semantic_color, stamp):
@@ -127,11 +132,10 @@ class ColorPclSemanticGenerator:
         self.semantic_color_vect[:,2:3] = semantic_color[:,:,2].reshape(-1,1)
         # Concatenate data 
         #self.ros_data[:,4:5] = self.bgr0_vect.view('<f4')
-        #self.ros_data[:,4:5] =self.semantic_color_vect.view('<f4')
+        self.ros_data[:,4:5] = self.semantic_color_vect.view('<f4')
         self.ros_data[:,5:6] = self.semantic_color_vect.view('<f4')
-
         return self.make_ros_cloud(stamp)
-    
+
   
 # Test
 if __name__ == "__main__":
