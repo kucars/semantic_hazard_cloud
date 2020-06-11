@@ -27,8 +27,10 @@ from skimage.transform import resize
 import cv2
 from cv_bridge.boost.cv_bridge_boost import getCvType
 
-from semantic_cloud.msg import *
-from semantic_cloud.srv import *
+#from semantic_cloud.msg import *
+from semantic_hazard_cloud.msg import *
+#from semantic_cloud.srv import *
+from semantic_hazard_cloud.srv import *
 #from jsk_rviz_plugins.msg import *
 from std_msgs.msg import ColorRGBA, Float32
 
@@ -46,7 +48,8 @@ sys.path.append(pkg_path + '/../image-segmentation-keras/keras_segmentation')
 print (pkg_path)
 imgCounter = 0 
 imgSemanticCounter=0 
-from predict import predict, predict_multiple , evaluate
+#from predict import predict, predict_multiple , evaluate
+from keras_segmentation.predict import predict, predict_multiple , evaluate
 
 # Class Labels
 labels = ['backgroud', 'risk1l', 'risk1h', 'risk2l', 'risk2h', 'risk3l', 'risk3h']
@@ -477,7 +480,7 @@ class SemanticCloud:
     '''
 def main(args):
     rospy.init_node('semantic_hazard_cloud_node', anonymous=True)
-    seg_cnn = SemanticCloud(gen_pcl = True)
+    seg_cnn = SemanticCloud(gen_pcl = False)
     try:
         rospy.spin()
     except KeyboardInterrupt:
