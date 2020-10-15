@@ -480,7 +480,8 @@ class SemanticCloud:
     '''
 def main(args):
     rospy.init_node('semantic_hazard_cloud_node', anonymous=True)
-    seg_cnn = SemanticCloud(gen_pcl = False)
+    pcl_flag = rospy.get_param('~gen_pcl', False)
+    seg_cnn = SemanticCloud(gen_pcl = pcl_flag)
     try:
         rospy.spin()
     except KeyboardInterrupt:
