@@ -10,7 +10,7 @@ The easiest way to run this package from a ready Docker image. Simply run the fi
 cd docker
 ./run_from_docker.sh keras
 ```
-`keras` is a name of your choice of the container name which will also the `catkin_ws` inside the container to a folder with the same name (`keras` in this case) in the home direcotry of the hose machine.
+`keras` is a name of your choice of the container name which will also the `catkin_ws` inside the container to a folder with the same name (`keras` in this case) in the home direcotry of the host machine.
 
 This will pull custom docker image (https://hub.docker.com/repository/docker/mzahana/ros-melodic-sim-cudagl-dev-env-10.1) that has all the required package already setup.
 
@@ -19,16 +19,17 @@ After running the `run_from_docker.sh`, you will be logged into the docker conta
 ## Detailed Installation
 This package is tested with TensorFlow 2.0.0, CUDA 10.1. It's higly recommended to run keras-segmentation using GPU to have higher execution speed.
 
-Some required packges/modules before installing image-segmentation-kerasL
+Some required packges/modules before installing image-segmentation-keras
 ```sh
+pip install opencv-python==4.2.0.32
+pip install Keras==2.3.1
 pip install launchpadlib==1.10.6
 pip install setuptools==41.0.0
-pip install tensorflow==2.0.0
+pip install tensorflow==2.1.0
 pip install cntk
 pip install 'scikit-image<0.15'
-pip install opencv-python
-
 pip install Theano
+
 cd ~
 git clone https://github.com/Theano/libgpuarray.git
 cd libgpuarray
