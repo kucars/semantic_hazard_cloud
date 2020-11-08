@@ -4,9 +4,15 @@
   <version>1.0.0</version>
   <description>Semantic segmantation using convolutional neural network</description>
 
-  <maintainer email="floatlazer@gmail.com">Xuan Zhang</maintainer>
+  <maintainer email="tarek@tarektaha.com">Tarek Taha</maintainer>
+  <maintainer email="reemashour1@gmail.com">Reem Ashour</maintainer>
+  <maintainer email="mohamedashraf123@gmail.com">Mohamed Abdelkader</maintainer>
+  <author>Tarek Taha</author>
+  <author>Reem Ashour</author>
+  <author>Mohamed Abdelkader</author>
+  
 
-  <license>MIT</license>
+  <license>BSD 3-Clause License</license>
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>roscpp</build_depend>
